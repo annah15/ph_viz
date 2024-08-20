@@ -1,322 +1,160 @@
+from bokeh.io import output_notebook, show
 import numpy as np
-import ripser
-from itertools import combinations
-from complexe import Complex, Cech_Complex, VR_Complex, Alpha_Complex
-import plotly.graph_objects as go
-import dash
-from dash import Dash, dcc, html, Input, Output
-import dash_bootstrap_components as dbc
-from dash_bootstrap_templates import load_figure_template
-import plotly.express as px
-from dash.dependencies import Input, State, Output, ALL, MATCH
-import pprint
-import math
+from bokeh.io import curdoc
+from bokeh.layouts import Column, Row
+from bokeh.models import ColumnDataSource, Slider, Select, Checkbox, Div, GroupBox, Title
+from bokeh.plotting import figure, output_file, show
+from bokeh.events import Tap
+import gudhi as gd
+from complexe import Cech_Complex, VR_Complex, Alpha_Complex
 
-# Initialize random see, load template and set initial variables to compute complex
-np.random.seed(298)
-load_figure_template(['darkly'])
+# Define the initial points for the different starting configurations
+circle_points =np.array([[1.71717172, 3.98989899],
+ [3.88888889, 3.13131313],
+ [4.04040404, 1.96969697],
+ [3.58585859, 1.01010101],
+ [1.16161616, 1.21212121],
+ [0.65656566, 2.27272727],
+ [0.90909091, 3.33333333],
+ [2.32323232, 0.55555556],
+ [3.08080808, 4.04040404]])
 
-initial_epsilon = 0.5
-initial_points = []
-complex = Cech_Complex(initial_epsilon, initial_points)
+two_circles_points = np.array([[2.42424242, 2.62626263],
+ [3.78787879, 2.67676768],
+ [4.6969697,  2.22222222],
+ [4.5959596,  1.06060606],
+ [3.18181818, 0.2020202 ],
+ [1.96969697, 1.26262626],
+ [2.97979798, 3.93939394],
+ [1.86868687, 5.        ],
+ [0.60606061, 4.44444444],
+ [0.95959596, 2.92929293]])
 
-# Initialize figure to draw the complex
-initial_fig = go.Figure()
+random_points = np.array([[1.21212121, 3.53535354],
+ [3.83838384, 4.39393939],
+ [3.98989899, 2.42424242],
+ [1.81818182, 1.06060606],
+ [2.57575758, 2.72727273],
+ [0.3030303,  2.07070707],
+ [4.24242424, 0.35353535]])
 
-# Add trace for balls
-initial_fig.add_trace(go.Scatter(x=[], y=[], mode='lines', line=dict(width=.5, color='#c8e4ff'), marker=dict(size=1, opacity=0.5), fill='toself', opacity=0.3, name='balls', hoverinfo='none'))
-# Add trace for points
-initial_fig.add_trace(go.Scatter(
-    x=[],
-    y=[],
-    mode='markers',
-    marker=dict(color='white', size=6),
-    name='points',
-    ))
-#Add trace for edges
-initial_fig.add_trace(go.Scatter(x=[], y=[], mode='lines', line=dict(width=1), marker=dict(color='white', size=1), name='edges', hoverinfo='none'))
-#Add trace for triangles
-#initial_fig.add_trace(go.Scatter(x=[], y=[], mode='lines', line=dict(width=0), fill='toself', opacity=0.5, name='triangles', hoverinfo='none'))
+#Initilize the global variables
+initial_epsilon = 0.9
+initial_points = circle_points
+complex = Cech_Complex(initial_points)
+complex.filter_simplices()
+betti = complex.compute_betti(initial_epsilon)
 
-# Add invisible points in the background to enable click events with arbitrary x and y values
-initial_fig.add_traces(
-    go.Scatter(
-        x=np.repeat(np.linspace(0, 5, 100), 100), y=np.tile(np.linspace(0, 5, 100), 100),
-        marker=dict(color='rgba(0,0,0,0)'),
-        name='background',
-        hoverinfo='none'
-    )
-)
-# Set layout
-initial_fig.update_layout(showlegend=False,
-                  template='darkly',
-                  autosize=False,
-                  width=600,
-                  height=600,
-                  margin=dict(l=0, r=0, b=0, t=0, pad=0),)               
-initial_fig.update_xaxes(title_text='X', range=[-1, 6])
-initial_fig.update_yaxes(title_text='Y', range=[-1, 6], scaleanchor='x', scaleratio=1)
+# Define data sources for Bokeh
+points_source = ColumnDataSource(data=dict(x=initial_points[:, 0], y=initial_points[:, 1]))
+ball_source = ColumnDataSource(data=dict(x=initial_points[:, 0], y=initial_points[:, 1], radii=[initial_epsilon]*len(initial_points)))
+edge_source = ColumnDataSource(data=dict(x=[initial_points[edge, 0] for edge in complex.get_edges(eps=initial_epsilon)], y=[initial_points[edge, 1] for edge in complex.get_edges(eps=initial_epsilon)]))
+triangle_source = ColumnDataSource(data=dict(x=[[[initial_points[triangle, 0]]] for triangle in complex.get_triangles(eps=initial_epsilon)], y=[[[initial_points[triangle, 1]]] for triangle in complex.get_triangles(eps=initial_epsilon)]))
 
+#Define callback functions
+def update_filtration(eps):
+    ball_source.data['radii'] = [eps]*len(complex.points)
+    edge_source.data = dict(x=[complex.points[edge, 0] for edge in complex.get_edges(eps=eps)], y=[complex.points[edge, 1] for edge in complex.get_edges(eps=eps)])
+    triangle_source.data = dict(x=[[[complex.points[triangle, 0]]] for triangle in complex.get_triangles(eps=eps)], y=[[[complex.points[triangle, 1]]] for triangle in complex.get_triangles(eps=eps)])
 
-#draw_balls(fig, initial_points, initial_epsilon)
+def update_complex(new_complex, points):
+    global complex
+    if new_complex == "Cech":
+        complex = Cech_Complex(points)
+    elif new_complex == "Vietoris-Rips":
+        complex = VR_Complex(points)
+    elif new_complex == "Alpha":
+        complex = Alpha_Complex(points)
+    complex.filter_simplices()
+    update_filtration(epsilon_slider.value)
 
-#Compute persistence diagram with Ripser
-#diagrams = ripser.ripser(complex.points)['dgms']
-#y_values = [pt[1] if pt[1] != np.inf else 0 for pt in diagrams[0]] + [pt[1] for pt in diagrams[1]]
-# Replace infinity with max value in all diagrams
-#diagrams = [np.array([[pt[0], pt[1] if pt[1] != np.inf else np.max(y_values) + .2] for pt in diagram]) for diagram in diagrams]
-pd_fig = go.Figure()
-# pd_fig.add_trace(go.Scatter(x=[pt[0] for pt in diagrams[0]], y=[pt[1] for pt in diagrams[0]], mode='markers', marker=dict(size=10), name='0D Homology'))
-# pd_fig.add_trace(go.Scatter(x=[pt[0] for pt in diagrams[1]], y=[pt[1] for pt in diagrams[1]], mode='markers', marker=dict(size=10), name='1D Homology'))
-# #Add diagonal
-# pd_fig.add_trace(go.Scatter(x=[-0.2, 2.5], y=[-0.2, 2.5], mode='lines', line=dict(color='white', width=1), name='diagonal', hoverinfo="none", showlegend=False))
-# pd_fig.update_layout(showlegend=True, template='darkly', xaxis_title='Birth', yaxis_title='Death', xaxis_range=[-0.2, 2.5], yaxis_range=[-0.2, 2.5])
-
-
-# Setup Dash app
-dbc_css = "https://cdn.jsdelivr.net/gh/AnnMarieW/dash-bootstrap-templates/dbc.min.css"
-app = Dash(__name__, external_stylesheets=[dbc.themes.DARKLY, dbc.icons.FONT_AWESOME, dbc_css])
-
-header = html.H4(
-    "Filtration of a Pointcloud", className="bg-primary text-white p-2 mb-2 text-center"
-)
-
-slider = html.Div(
-    [
-        dbc.Label("Epsilon"),
-        dcc.Slider(
-            0,
-            2,
-            0.1,
-            updatemode="drag",
-            id="epsilon-slider",
-            value=initial_epsilon,
-            tooltip={"placement": "bottom", "always_visible": True},
-            className="p-0",
-        ),
-    ], style={'margin-top': '10px', 'margin-bottom': '30px'},
-    className="mb-4",
-)
-
-filtration_select = html.Div(
-    [
-        dbc.Label("Select filtration"),
-        dcc.Dropdown(
-            ["Cech", "Alpha", "Vietoris-Rips"],
-            "Cech",
-            id="complex",
-            clearable=False,
-        ),
-    ],
-    className="mb-4",
-)
-
-start_config_select = html.Div(
-    [
-        dbc.Label("Select starting configuration"),
-        dcc.Dropdown(
-            ["Circle", "Two Circles", "Random"],
-            "Circle",
-            id="start_config",
-            clearable=False,
-        ),
-    ],
-    className="mb-4",
-)
-
-controls = dbc.Card(
-    [filtration_select, slider, start_config_select],
-    body=True,
-)
-
-persistence_diagram = dbc.Card(
-    [dcc.Graph(figure=pd_fig, id='persistence-diagram', className='m-4 dbc dbc-ag-grid')],
-    body=True,
-)
-
-betti_numbers= html.Div([
-    dcc.Markdown(f'''$$\\beta_0 = 20$$''',mathjax=True),
-    dcc.Markdown(f'''$$\\beta_1 = 0$$''',mathjax=True),], id='betti',
-    style={'float': 'right','margin': 'auto'}
-    )
-
-graphs = dbc.Card(
-    [dbc.Row([
-        betti_numbers,
-        dcc.Graph(figure=initial_fig, id='complex_fig', className='m-4 dbc dbc-ag-grid', style={ 'float': 'right','margin': 'auto'}),]
-        , style={'justify-items': 'center', "align-items": "center"}),
-        
-    ],
-    body=True,
-    style={"justify-content": "center", "align-items": "center"},
-)
-
-app.layout = html.Div([
-    dcc.Store(id='points', data=initial_points),
-    dbc.Container(
-    [
-        header,
-        dbc.Row([
-            dbc.Col([
-                controls,
-                persistence_diagram
-            ],  width=5),
-            dbc.Col([
-                graphs
-            ], width=7),
-        ],
-        align="center",
-
-        ),
-    ],
-    fluid=True,
-    className="dbc dbc-ag-grid",
-)])
-
-@app.callback(
-    Output("complex_fig", "figure"),
-    Output("betti", "children"),
-    Output("points", "data"),
-    Input("complex_fig", "clickData"),
-    Input("complex", "value"),
-    Input("epsilon-slider", "value"),
-    State("points", "data"),
-    State("complex_fig", "figure")
-)
-def update_complex(new_point, complex_type, eps, points, fig):
-    fig = go.Figure(initial_fig)
-    #If points is empty it has to be initialize as 2d np.array, otherwise it has to be casted to a np.array
-    if len(points) <1:
-        points = np.empty(shape=[0,2])
+def change_points(points, overwrite=False):
+    global complex
+    print(complex.points)
+    if overwrite:
+        complex.points = points
     else:
-        points = np.array(points)
-    #If update has been triggered by a click event, a new point has to be added or an existing point has to be deleted
-    if dash.callback_context.triggered_id == "complex_fig":
-        x, y = new_point['points'][0]['x'], new_point['points'][0]['y']
         #If the clicked point already exists, it should be deleted, else it is added as a new point to the complex
-        if (points==[x,y]).all(axis=1).any():
-            points = np.delete(points, (points==[x,y]).all(axis=1), axis=0)
+        if (np.round(complex.points, 1)==np.round(points,1)).all(axis=1).any():
+            print('delete', points)
+            complex.points = np.delete(complex.points, (np.round(complex.points, 1)==np.round(points,1)).all(axis=1), axis=0)
+            print(complex.points)
         else:
-            points = np.append(points, [[x, y]], axis=0)
-    #If the update has been triggered by a change of the simplicial filtration, a new complex has to be initialized
-    if complex_type == "Cech":
-        complex = Cech_Complex(eps, points)
-    elif complex_type == "Vietoris-Rips":
-        complex = VR_Complex(eps, points)
-    else:
-        complex = Alpha_Complex(eps, points)
-    #Now that the filtration with respect to the filtration eps is computed, draw the components
-    if len(points) > 0:
-        fig.update_traces(x=points[:, 0], y=points[:, 1], selector=dict(name='points'), overwrite=False)
-    # draw_points(complex_fig, points)
+            print('add', points)
+            complex.points = np.append(complex.points, [points], axis=0)
+    complex.filter_simplices()
+    points_source.data = dict(x=complex.points[:, 0], y=complex.points[:, 1])
+    ball_source.data = dict(x=complex.points[:, 0], y=complex.points[:, 1], radii=[epsilon_slider.value]*len(complex.points))
+    update_filtration(epsilon_slider.value)
 
-    x_ball , y_ball = draw_balls(points, eps)
-    fig.update_traces(x=x_ball, 
-                      y=y_ball, 
-                      selector=dict(name='balls'),
-                      overwrite=False)
 
-    x_edge,y_edge = draw_one_simplices(points, complex.edges)
-    fig.update_traces( x=x_edge,
-                       y=y_edge,
-                       selector=dict(name='edges'),
-                       overwrite=True)
+
+# Initialize Bokeh figures
+complex_fig = figure(width=600, height=600,
+                     x_range=(-1, 6), y_range=(-1, 6),
+                     tools="tap")
+complex_fig.add_layout(Title(text="Simplicial Complex", text_font_size='20px'), 'above')
+complex_fig.scatter('x', 'y', source=points_source, size=8, color='blue')
+complex_fig.circle('x', 'y', source=ball_source, radius='radii', fill_alpha=0.2, color='red')
+complex_fig.multi_line('x', 'y', source=edge_source, line_width=1, color='blue')
+complex_fig.multi_polygons('x', 'y', source=triangle_source, fill_color="rgba(255, 247, 0, 0.5)", line_width=1)
+
+complex_fig.on_event(Tap, lambda event: change_points(np.array([event.x, event.y])))
+
+# Persistence diagram
+pd_fig = figure(width=400, height=400, x_range=(-0.2, 5), y_range=(-0.2, 5))
+pd_fig.add_layout(Title(text="Persistence Diagram", text_font_size='20px'), 'above')
+pd_fig.line([-0.2, 5], [-0.2, 5], color='black', line_width=1)
+pd_fig.xaxis.axis_label = "Birth"
+pd_fig.yaxis.axis_label = "Death"
+
+# Extract persistence pairs (birth and death values)
+persistence = complex.simplextree.persistence()
+
+# Prepare data for Bokeh plot
+pd_source = {}
+for dim in range(4):
+    pd_source[dim] = dict(
+                    x = [],
+                    y = []
+    )
+
+for interval in persistence:
+    dim, (birth, death) = interval
+    pd_source[dim]['x'].append(birth)
+    pd_source[dim]['y'].append(death if death != float('inf') else max([death for _, (_, death) in persistence if death != float('inf')]+[2]) + 1)
+
+# Create a point for each interval
+colors = ['red', 'blue', 'green', 'orange']
+for dim in range(4):
+    pd_fig.scatter('x', 'y', source=ColumnDataSource(pd_source[dim]), size=8, color=colors[dim])
+
     
-    triangle_shapes = draw_two_simplices(points, complex.triangles)
-    fig.update_layout(shapes=triangle_shapes, overwrite=True)
-    print(fig.layout)
-    return fig, [dcc.Markdown(f'''$$\\beta_0 = {complex.betti0}$$''',mathjax=True),dcc.Markdown(f'''$$\\beta_1 ={complex.betti1}$$''',mathjax=True)], points
-
-def draw_points(fig:go.Figure, points:np.ndarray):
-    '''
-    Draw points with given coordinates.
-    
-    Parameters:
-    fig: go.Figure - the figure to draw the points on
-    points: list[list] - list of points
-    '''
-    if len(points) > 0:
-        fig.update_traces(x=points[:, 0], y=points[:, 1], selector=dict(name='points'), overwrite=False)
-
-def draw_balls(centers:list[list], R:float):
-    '''
-    Draw balls with given centers and radius.
-    
-    Parameters:
-    fig: go.Figure - the figure to draw the balls on
-    centers: list[list] - list of centers of the balls
-    R: float - radius of the balls
-    '''
-    x_sphere, y_sphere = [], []
-    for x, y in centers:
-        phi = np.linspace(0, 2 * np.pi, 30)
-        theta = np.linspace(0, np.pi, 30)
-        phi, theta = np.meshgrid(phi, theta)
-        
-        x_sphere = np.concatenate((x_sphere, (R * np.sin(theta) * np.cos(phi)).flatten() + x, [None]))
-        y_sphere =np.concatenate((y_sphere, (R * np.sin(theta) * np.sin(phi)).flatten() + y, [None]))
-    return x_sphere, y_sphere
-    
-    
-def draw_one_simplices(nodes:np.ndarray, edges:np.ndarray[np.ndarray]):
-    '''
-    Draw one-simplices (edges) with given nodes and edges.
-    
-    Parameters:
-    fig: go.Figure - the figure to draw the one-simplices on
-    nodes: list[list] - list of nodes
-    edges: list[set] - list of edges
-    '''
-    if len(edges)> 0:
-        x=np.concatenate([[ nodes[edges[i,0]][0], nodes[edges[i,1]][0], None] for i in range(len(edges))])
-        y=np.concatenate([[ nodes[edges[i,0]][1], nodes[edges[i,1]][1], None] for i in range(len(edges))])
-        return x,y           
-    else:
-        return [],[]
-        
-def draw_two_simplices(nodes:np.ndarray, triangles:np.ndarray[np.ndarray]):
-    '''
-    Draw two-simplices (triangles) with given nodes and triangles.
-    
-    Parameters:
-    fig: go.Figure - the figure to draw the two-simplices on
-    nodes: list[list] - list of nodes
-    triangles: list[set] - list of triangles
-    '''
-    #if len(triangles) > 0:
-        # fig.update_traces(x=np.concatenate([[None, nodes[triangles[i,0]][0], nodes[triangles[i,1]][0], nodes[triangles[i,2]][0], nodes[triangles[i,0]][0], None] for i in range(len(triangles))]),
-        #                 y=np.concatenate([[None, nodes[triangles[i,0]][1], nodes[triangles[i,1]][1], nodes[triangles[i,2]][1], nodes[triangles[i,0]][1], None] for i in range(len(triangles))]),
-        #                 selector=dict(name="triangles"),
-        #                 overwrite=False)
-    shapes = []
-    for triangle in triangles:
-            coords = nodes[triangle]
-            path = f'M {coords[0][0]} {coords[0][1]} L {coords[1][0]} {coords[1][1]} L {coords[2][0]} {coords[2][1]} z'
-            shapes.append(go.layout.Shape(
-                        type="path",
-                        path=path,
-                        fillcolor="rgba(255, 210, 73, 0.5)",
-                        line=dict(width=0),
-                        layer="between",
-                        editable=True
-                ))
-    return shapes
-        
-def all_circles_intersect(points, R):
-    center_of_mass = np.mean(points, axis=0)
-    return all(np.linalg.norm(center_of_mass-p) < R for p in points)
 
 
-def filter_combinations_by_circle_intersection(points, R, comb_size):
-    """Get combinations of points forming simplices where the circles intersect."""
-    filtered_combinations = []
-    for comb in combinations(range(len(points)), comb_size):
-        if all_circles_intersect([points[i] for i in comb], R):
-            filtered_combinations.append(comb)
-    return filtered_combinations
+# Define the layout of the Bokeh app
+header = Div(text=r'<h1><center>Simplicial Filtrations</h1>', align='center')
 
+# Define the controls for user interaction
+epsilon_slider = Slider(start=0, end=4, value=initial_epsilon, step=0.01, title="Epsilon")
+epsilon_slider.on_change('value', lambda attr, old, new: update_filtration(new))
+complex_dropdown = Select(title="Complex", value="Cech", options=["Cech", "Vietoris-Rips", "Alpha"], sizing_mode="stretch_width")
+complex_dropdown.on_change('value', lambda attr, old, new: update_complex(new, complex.points))
+extended_persistence_checkbox = Checkbox(active=False, label="Extended Persistence")
+controls = GroupBox(child=Column(epsilon_slider, complex_dropdown, extended_persistence_checkbox), checkable=False, sizing_mode="stretch_width")
 
+#Define the persistence diagram plot
+persistence_diagram = Column(pd_fig)
 
+#Define the simplicial complex plot including the Betti numbers and the starting configuration selection
+betti_numbers = Div(text=r'<h2>Betti numbers</h2> <p><center>$$\beta_0 = $${betti[0]}</p> <p>$$\beta_1$${betti[1]}</p><p>$$\beta_2 =$${betti[2]}</p>')
+start_config_select = Select(title="Starting configuration", value="Circle", options=["Circle", "Two circles", "Random"])
+start_config_select.on_change('value', lambda attr, old, new: change_points(circle_points if new == "Circle" else two_circles_points if new == "Two circles" else random_points, True))
+simplicial_complex = Row(children=[betti_numbers, Column(complex_fig, start_config_select)])
 
-if __name__ == "__main__":
-    app.run_server(debug=True)
+# Define the final layout of the Bokeh app
+layout = Column(header, GroupBox(child=Row(children=[Column(controls, persistence_diagram), simplicial_complex], align='center'), sizing_mode='stretch_both', align='center'), sizing_mode="stretch_both")
+
+# Add the layout to the Bokeh app
+curdoc().add_root(layout)
+curdoc().title = "Simplicial Filtrations"

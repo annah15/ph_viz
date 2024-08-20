@@ -1,10 +1,5 @@
 numpy
-plotly
-ipywidgets
-matplotlib
 pandas
 ripser
-ghudi
-dash
-dash-bootstrap-components
-nbformat #important for plotly.graph_objects
+gudhi
+bokeh
