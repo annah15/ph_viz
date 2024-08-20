@@ -50,12 +50,20 @@ points_source = ColumnDataSource(data=dict(x=initial_points[:, 0], y=initial_poi
 ball_source = ColumnDataSource(data=dict(x=initial_points[:, 0], y=initial_points[:, 1], radii=[initial_epsilon]*len(initial_points)))
 edge_source = ColumnDataSource(data=dict(x=[initial_points[edge, 0] for edge in complex.get_edges(eps=initial_epsilon)], y=[initial_points[edge, 1] for edge in complex.get_edges(eps=initial_epsilon)]))
 triangle_source = ColumnDataSource(data=dict(x=[[[initial_points[triangle, 0]]] for triangle in complex.get_triangles(eps=initial_epsilon)], y=[[[initial_points[triangle, 1]]] for triangle in complex.get_triangles(eps=initial_epsilon)]))
+pd_source = complex.get_persistence_pairs()
+for dim in range(4):
+    pd_source[dim] = ColumnDataSource(pd_source[dim])
 
 #Define callback functions
 def update_filtration(eps):
     ball_source.data['radii'] = [eps]*len(complex.points)
     edge_source.data = dict(x=[complex.points[edge, 0] for edge in complex.get_edges(eps=eps)], y=[complex.points[edge, 1] for edge in complex.get_edges(eps=eps)])
     triangle_source.data = dict(x=[[[complex.points[triangle, 0]]] for triangle in complex.get_triangles(eps=eps)], y=[[[complex.points[triangle, 1]]] for triangle in complex.get_triangles(eps=eps)])
+
+def update_pd():
+    pd_pairs = complex.get_persistence_pairs()
+    for dim in range(4):
+        pd_source[dim].data = dict(x=pd_pairs[dim]['x'], y=pd_pairs[dim]['y'])
 
 def update_complex(new_complex, points):
     global complex
@@ -67,26 +75,23 @@ def update_complex(new_complex, points):
         complex = Alpha_Complex(points)
     complex.filter_simplices()
     update_filtration(epsilon_slider.value)
+    update_pd()
 
 def change_points(points, overwrite=False):
     global complex
-    print(complex.points)
     if overwrite:
         complex.points = points
     else:
         #If the clicked point already exists, it should be deleted, else it is added as a new point to the complex
         if (np.round(complex.points, 1)==np.round(points,1)).all(axis=1).any():
-            print('delete', points)
             complex.points = np.delete(complex.points, (np.round(complex.points, 1)==np.round(points,1)).all(axis=1), axis=0)
-            print(complex.points)
         else:
-            print('add', points)
             complex.points = np.append(complex.points, [points], axis=0)
     complex.filter_simplices()
     points_source.data = dict(x=complex.points[:, 0], y=complex.points[:, 1])
     ball_source.data = dict(x=complex.points[:, 0], y=complex.points[:, 1], radii=[epsilon_slider.value]*len(complex.points))
     update_filtration(epsilon_slider.value)
-
+    update_pd()
 
 
 # Initialize Bokeh figures
@@ -108,29 +113,11 @@ pd_fig.line([-0.2, 5], [-0.2, 5], color='black', line_width=1)
 pd_fig.xaxis.axis_label = "Birth"
 pd_fig.yaxis.axis_label = "Death"
 
-# Extract persistence pairs (birth and death values)
-persistence = complex.simplextree.persistence()
-
-# Prepare data for Bokeh plot
-pd_source = {}
-for dim in range(4):
-    pd_source[dim] = dict(
-                    x = [],
-                    y = []
-    )
-
-for interval in persistence:
-    dim, (birth, death) = interval
-    pd_source[dim]['x'].append(birth)
-    pd_source[dim]['y'].append(death if death != float('inf') else max([death for _, (_, death) in persistence if death != float('inf')]+[2]) + 1)
-
 # Create a point for each interval
 colors = ['red', 'blue', 'green', 'orange']
+
 for dim in range(4):
-    pd_fig.scatter('x', 'y', source=ColumnDataSource(pd_source[dim]), size=8, color=colors[dim])
-
-    
-
+    pd_fig.scatter('x', 'y', source=pd_source[dim] , size=8, color=colors[dim])
 
 # Define the layout of the Bokeh app
 header = Div(text=r'<h1><center>Simplicial Filtrations</h1>', align='center')

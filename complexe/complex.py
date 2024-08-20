@@ -36,3 +36,26 @@ class Complex:
         
     def compute_betti(self, eps):
         return np.pad(self.simplextree.persistent_betti_numbers(2*eps, 2*eps), (0, 3), 'constant', constant_values=(0))
+
+    def get_persistence_pairs(self, eps=None):
+        '''
+        Extract persistence pairs (birth and death values)
+
+        '''
+        # Extract persistence pairs (birth and death values)
+        persistence = self.simplextree.persistence()
+
+        # Prepare data for Bokeh plot
+        dimensions = {}
+        for dim in range(4):
+            dimensions[dim] = dict(
+                            x = [],
+                            y = []
+            )
+
+        for interval in persistence:
+            dim, (birth, death) = interval
+            dimensions[dim]['x'].append(birth)
+            dimensions[dim]['y'].append(death if death != float('inf') else max([death for _, (_, death) in persistence if death != float('inf')]+[2]) + 1)
+
+        return dimensions
