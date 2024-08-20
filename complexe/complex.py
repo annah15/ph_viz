@@ -4,52 +4,35 @@ import abc
 import gudhi as gd
 
 class Complex:
-    def __init__(self, initial_epsilon, points=None):
-        self.eps = initial_epsilon
+    def __init__(self, points=None):
         if points is None:
             self.points = np.random.rand(20, 2)*5
         else:
             self.points = points
-        self.filter_one_simplices(initial_epsilon)
-        self.filter_two_simplices(initial_epsilon)
         self.simplextree = gd.SimplexTree()
+        self.simplextree.set_dimension(2)
         for i in range(len(self.points)):
             self.simplextree.insert([i], 0)
-        self.betti0, self.betti1 = self.compute_betti(initial_epsilon)
+        self.betti = [len(self.points), 0, 0]
     
     @abc.abstractmethod
-    def filter_one_simplices(self, eps:float):
+    def filter_simplices(self):
         """
-        Filter one simplices, with respect to the filtration parameter eps.
-
-        Parameters:
-        eps: float - filtration parameter
+        Filter simplices with respect to a filtration up to dimension 2.
         """
         return
-
-    @abc.abstractmethod
-    def filter_two_simplices(self, eps):
-        """
-        Filter two simplices, with respect to the filtration parameter eps.
-
-        Parameters:
-        eps: float - filtration parameter
-        """
-        return 
     
+    def get_edges(self, eps=None):
+        if eps is None:
+            return np.array([simplex[0] for simplex in self.simplextree.get_skeleton(1) if len(simplex[0]) == 2])
+        else:
+            return np.array([simplex[0] for simplex in self.simplextree.get_skeleton(1) if len(simplex[0]) == 2 and simplex[1] <= 2*eps])
+    
+    def get_triangles(self, eps=None):
+        if eps is None:
+            return np.array([simplex[0] for simplex in self.simplextree.get_skeleton(2) if len(simplex[0]) == 3])
+        else:
+            return np.array([simplex[0] for simplex in self.simplextree.get_skeleton(2) if len(simplex[0]) == 3 and simplex[1] <= 2*eps])
+        
     def compute_betti(self, eps):
-        for edge in self.edges:
-            self.simplextree.insert(list(edge))
-        for triangle in self.triangles:
-            self.simplextree.insert(list(triangle))
-        # Compute the persistence diagram
-        self.simplextree.compute_persistence()
-
-        # Extract persistence intervals for dimensions 0 and 1
-        betti_0_intervals = self.simplextree.persistence_intervals_in_dimension(0)
-        betti_1_intervals = self.simplextree.persistence_intervals_in_dimension(1)
-
-        # Calculate Betti numbers
-        betti_0 = len([interval for interval in betti_0_intervals if interval[1] == float('inf')])
-        betti_1 = len([interval for interval in betti_1_intervals if interval[1] == float('inf')])
-        return betti_0, betti_1
+        return np.pad(self.simplextree.persistent_betti_numbers(2*eps, 2*eps), (0, 3), 'constant', constant_values=(0))

@@ -1,36 +1,17 @@
 import numpy as np
+import gudhi as gd
+from scipy.spatial import distance_matrix
 from itertools import combinations
 from complexe import Complex
 
 class VR_Complex(Complex):
-    def __init__(self, initial_epsilon, points=None):
-        super().__init__(initial_epsilon, points)
+    def __init__(self, points=None):
+        super().__init__(points)
 
-    def filter_one_simplices(self, eps:float):
+    def filter_simplices(self):
         """
-        Filter one simplices, with respect to the filtration parameter eps.
-
-        Parameters:
-        eps: float - filtration parameter
+        Filter simplices with respect to the vietoris-rips filtration up to dimension 2.
         """
-        self.edges = np.array([
-            (i, j)
-            for i, j in combinations(range(len(self.points)), 2)
-            if np.linalg.norm(self.points[i] - self.points[j]) < 2 * eps
-        ])
-
-    def filter_two_simplices(self, eps):
-        """
-        Filter two simplices, with respect to the filtration parameter eps.
-
-        Parameters:
-        eps: float - filtration parameter
-        """
-        self.triangles = np.array([
-            (c1, c2, c3)
-            for c1, c2, c3 in combinations(range(len(self.points)), 3)
-            if all(
-                np.linalg.norm(self.points[i] - self.points[j]) < 2 * eps
-                for i, j in combinations([c1, c2, c3], 2)
-            )
-        ])
+        rips_skeleton = gd.RipsComplex(points=self.points)
+        self.simplextree = rips_skeleton.create_simplex_tree(max_dimension=2)
+        self.simplextree.compute_persistence(persistence_dim_max=True)
