@@ -15,4 +15,7 @@ class Alpha_Complex(Complex):
         """
         alpha_skeleton = gd.AlphaComplex(points=self.points)
         self.simplextree = alpha_skeleton.create_simplex_tree()
-        self.simplextree.compute_persistence()
+        # Adapt filtration values match eps values of rips filtration
+        for simplex, filtration in self.simplextree.get_filtration():
+            self.simplextree.assign_filtration(simplex, 2*(filtration**0.5))
+        self.simplextree.compute_persistence(persistence_dim_max=True)
