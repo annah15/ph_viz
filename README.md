@@ -1,4 +1,3 @@
-
 # PH Vizualization
 
 This project provides a visualization of different simplicial filtrations of a point cloud. 
@@ -14,6 +13,7 @@ source .env/bin/activate
 pip install -r requirements.txt
 ```
 
+## Running the app
 To view the app directly from a Bokeh server, stay in the parent directory ph-visualization, and execute the command:
 
 ```bash
