@@ -51,27 +51,57 @@ ball_source = ColumnDataSource(data=dict(x=initial_points[:, 0], y=initial_point
 edge_source = ColumnDataSource(data=dict(x=[initial_points[edge, 0] for edge in complex.get_edges(eps=initial_epsilon)], y=[initial_points[edge, 1] for edge in complex.get_edges(eps=initial_epsilon)]))
 triangle_source = ColumnDataSource(data=dict(x=[[[initial_points[triangle, 0]]] for triangle in complex.get_triangles(eps=initial_epsilon)], y=[[[initial_points[triangle, 1]]] for triangle in complex.get_triangles(eps=initial_epsilon)]))
 pd_source = complex.get_persistence_pairs()
+persistent_pd_source = complex.get_persistence_pairs(eps=initial_epsilon)
+
 for dim in range(4):
     pd_source[dim] = ColumnDataSource(pd_source[dim])
+    persistent_pd_source[dim] = ColumnDataSource(persistent_pd_source[dim])
 
 #Define callback functions
 def update_filtration(eps):
+    '''
+    Update the simplicial complex and the persistence diagram with the new filtration value.
+
+    Args:
+        - eps (float): Filtration value
+    '''
     ball_source.data['radii'] = [eps]*len(complex.points)
     edge_source.data = dict(x=[complex.points[edge, 0] for edge in complex.get_edges(eps=eps)], y=[complex.points[edge, 1] for edge in complex.get_edges(eps=eps)])
     triangle_source.data = dict(x=[[[complex.points[triangle, 0]]] for triangle in complex.get_triangles(eps=eps)], y=[[[complex.points[triangle, 1]]] for triangle in complex.get_triangles(eps=eps)])
+    update_pd(eps)
 
-def update_pd():
-    pd_pairs = complex.get_persistence_pairs()
-    for dim in range(4):
-        pd_source[dim].data = dict(x=pd_pairs[dim]['x'], y=pd_pairs[dim]['y'])
+def update_pd(eps=None):
+    '''
+    Update the ColumnDataSource for the persistence diagram. 
+    If eps is not None, the persistent_pd_source is updated with the persistence pairs up to the given filtration value.
+    Else, the pd_source is updated with all persistence pairs.
 
-def update_complex(new_complex, points):
+    Args:
+        - eps (float), optional: Filtration value
+    '''
+    if eps:
+        pd_pairs = complex.get_persistence_pairs(eps)
+        for dim in range(4):
+            persistent_pd_source[dim].data = dict(x=pd_pairs[dim]['x'], y=pd_pairs[dim]['y'])
+    else:
+        pd_pairs = complex.get_persistence_pairs()
+        for dim in range(4):
+            pd_source[dim].data = dict(x=pd_pairs[dim]['x'], y=pd_pairs[dim]['y'])
+
+def update_complex(new_filtration, points):
+    '''
+    Update the simplicial complex with the new filtration type.
+
+    Args:
+        - new_filtration (str): New complex type
+        - points (np.array): New points for the simplicial complex
+    '''
     global complex
-    if new_complex == "Cech":
+    if new_filtration == "Cech":
         complex = Cech_Complex(points)
-    elif new_complex == "Vietoris-Rips":
+    elif new_filtration == "Vietoris-Rips":
         complex = VR_Complex(points)
-    elif new_complex == "Alpha":
+    elif new_filtration == "Alpha":
         complex = Alpha_Complex(points)
     complex.filter_simplices()
     update_filtration(epsilon_slider.value)
@@ -117,7 +147,8 @@ pd_fig.yaxis.axis_label = "Death"
 colors = ['red', 'blue', 'green', 'orange']
 
 for dim in range(4):
-    pd_fig.scatter('x', 'y', source=pd_source[dim] , size=8, color=colors[dim])
+    pd_fig.scatter('x', 'y', source=pd_source[dim] , size=8, color=colors[dim], alpha=0.4)
+    pd_fig.scatter('x', 'y', source=persistent_pd_source[dim] , size=8, color=colors[dim], alpha=1)
 
 # Define the layout of the Bokeh app
 header = Div(text=r'<h1><center>Simplicial Filtrations</h1>', align='center')
