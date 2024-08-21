@@ -166,8 +166,8 @@ persistence_diagram = Column(pd_fig)
 
 #Define the simplicial complex plot including the Betti numbers and the starting configuration selection
 betti_numbers = Div(text=r'<h2>Betti numbers</h2> <p><center>$$\beta_0 = $${betti[0]}</p> <p>$$\beta_1$${betti[1]}</p><p>$$\beta_2 =$${betti[2]}</p>')
-start_config_select = Select(title="Starting configuration", value="Circle", options=["Circle", "Two circles", "Random"])
-start_config_select.on_change('value', lambda attr, old, new: change_points(circle_points if new == "Circle" else two_circles_points if new == "Two circles" else random_points, True))
+start_config_select = Select(title="Starting configuration", value="Circle", options=["Circle", "Two circles", "Random", "Empty"], sizing_mode="stretch_width")
+start_config_select.on_change('value', lambda attr, old, new: change_points(circle_points if new == "Circle" else two_circles_points if new == "Two circles" else random_points if new=="Random" else np.empty(shape=[0,2]), True))
 simplicial_complex = Row(children=[betti_numbers, Column(complex_fig, start_config_select)])
 
 # Define the final layout of the Bokeh app
