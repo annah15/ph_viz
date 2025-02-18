@@ -13,9 +13,11 @@ class Cech_Complex(Complex):
         """
         Filter simplices with respect to the cech filtration up to dimension 2.
         """
+        #Start by creating the cech skeleton which is a rips complex of dim 1
         cech_skeleton = gd.RipsComplex(points=self.points)
         self.simplextree = cech_skeleton.create_simplex_tree(max_dimension=1)
 
+        #Compute the filtration values for the 2-simplices by computing the circumcenter and circumradius of each triangle
         for (A, B, C) in combinations(range(len(self.points)), 3):
             circumcenter, circumradius = self.circumcenter_and_radius(self.points[A], self.points[B], self.points[C])
             if self.is_point_in_triangle(circumcenter, self.points[A], self.points[B], self.points[C]):
@@ -25,25 +27,18 @@ class Cech_Complex(Complex):
             self.simplextree.insert([A, B, C], filtration)
 
         self.simplextree.compute_persistence(persistence_dim_max=True)
-
-    def circumradius(self, A, B, C):
-        # Compute the side lengths a, b, c
-        a = np.linalg.norm(B - C)
-        b = np.linalg.norm(A - C)
-        c = np.linalg.norm(A - B)
-        
-        # Compute the semi-perimeter
-        s = (a + b + c) / 2
-        
-        # Compute the area using Heron's formula
-        area = np.sqrt(s * (s - a) * (s - b) * (s - c))
-        
-        # Compute the circumradius
-        R = (a * b * c) / (4 * area)
-        
-        return R
     
     def circumcenter_and_radius(self, A, B, C):
+        """
+        Compute the circumcenter and circumradius of a triangle given its three vertices.
+
+        Parameters:
+        - A, B, C: Coordinates of the triangle's vertices (x, y).
+
+        Returns:
+        - circumcenter: Numpy array of the circumcenter coordinates (x, y).
+        - radius: Float of the circumradius.
+        """
         # Unpack points
         x1, y1 = A
         x2, y2 = B

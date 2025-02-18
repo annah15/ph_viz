@@ -2,6 +2,7 @@ import numpy as np
 from itertools import combinations
 import abc
 import gudhi as gd
+from pprint import pprint
 
 class Complex:
     def __init__(self, points=None):
@@ -64,30 +65,71 @@ class Complex:
         '''
         return np.pad(self.simplextree.persistent_betti_numbers(2*eps, 2*eps), (0, 3), 'constant', constant_values=(0))
 
-    def get_persistence_pairs(self, eps=None):
+    def get_persistence_pairs(self, eps=None, extended=False):
         '''
         Extract persistence pairs (birth and death values)
 
         Args:
             - eps (float), optional: Maximum distance for the persistence pairs
+            - extended (bool), optional: Compute extended persistence
 
         Returns:
             - dimensions (dict):  Persistence pairs for each dimension
         '''
-        # Extract persistence pairs (birth and death values)
-        persistence = self.simplextree.persistence()
+        max_filtration = max([death for _, (_, death) in self.simplextree.persistence() if death != float('inf')]+[2])+1
+        # Prepare data structures
+        diagrams = []
+        # List of ordinary, extended and relative persistence diagrams
+        for _ in range(3):
+            # With dictionaries for each dimension
+            dimensions = {}
+            for dim in range(4):
+                    dimensions[dim] = dict(
+                                    x = [],
+                                    y = []
+                    )
+            diagrams.append(dimensions)
 
-        # Prepare data for Bokeh plot
-        dimensions = {}
-        for dim in range(4):
-                dimensions[dim] = dict(
-                                x = [],
-                                y = []
-                )
+        if not extended:
+            # Extract persistence pairs (birth and death values)
+            persistence = self.simplextree.persistence()
 
-        for interval in persistence:
-            dim, (birth, death) = interval
-            if eps==None or (birth < 2*eps and death < 2*eps):
-                dimensions[dim]['x'].append(birth)
-                dimensions[dim]['y'].append(death if death != float('inf') else max([death for _, (_, death) in persistence if death != float('inf')]+[2]) + 1)
-        return dimensions
+            for interval in persistence:
+                dim, (birth, death) = interval
+                if eps==None or (birth < 2*eps and death < 2*eps):
+                    diagrams[0][dim]['x'].append(birth)
+                    diagrams[0][dim]['y'].append(death if death != float('inf') else max_filtration)
+        
+        else:
+            # Extend the simplicial complex by adding a vertex and connecting it to all simplices of the original complex (coning)
+            cone = gd.SimplexTree(self.simplextree)
+            cone.insert([len(self.points)], filtration=max_filtration)
+            for simplex, filt in self.simplextree.get_simplices():
+                # To extract the diffent types of persistence diagrams, we need to shift the filtration values
+                cone.assign_filtration(simplex, filtration=filt - max_filtration)
+                cone.insert(simplex + [len(self.points)], filtration=filt)
+            
+            # Compute persistence pairs of the extended complex
+            persistence = cone.persistence()
+            for interval in persistence:
+                dim, (birth, death) = interval
+                if eps==None or (birth < 2*eps and death < 2*eps):
+                    if (birth < 0 and death < 0):
+                        #The interval is in the ordinary persistence diagram
+                        diagrams[0][dim]['x'].append(birth + max_filtration)
+                        diagrams[0][dim]['y'].append(death + max_filtration )
+                    if (birth < 0 and death >= 0):
+                        #The interval is in the essential persistence diagram
+                        diagrams[1][dim]['x'].append(birth + max_filtration)
+                        diagrams[1][dim]['x'].append(death if death != float('inf') else max_filtration)
+                        diagrams[1][dim]['y'].append(death if death != float('inf') else max_filtration)
+                        diagrams[1][dim]['y'].append(birth + max_filtration)
+                    if (birth >= 0 and birth < max_filtration and death >= 0 and death < max_filtration):
+                        #The interval is in the relative persistence diagram
+                        diagrams[2][dim-1]['y'].append(birth if birth != float('inf') else max_filtration)
+                        diagrams[2][dim-1]['x'].append(death if death != float('inf') else max_filtration)    
+        return diagrams
+            
+
+    
+            
